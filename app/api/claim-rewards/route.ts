@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifySessionAndCsrf } from "@/lib/cookies";
 import { getUserDetails } from "@/lib/thirdweb";
 import { validateGameStats, validateTimestamp, validateRewardAmount, validateRequestSize } from "@/lib/validation";
-import { rateLimitGameRewards } from "@/lib/rateLimit";
+
 import axios from "axios";
 
 interface RewardRequest {
@@ -83,36 +83,9 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		// Apply rate limiting
-		const rateLimitResult = rateLimitGameRewards(userAddress);
-		if (!rateLimitResult.allowed) {
-			return NextResponse.json(
-				{ 
-					error: "Rate limit exceeded. Please wait before claiming rewards again.",
-					resetTime: rateLimitResult.resetTime
-				},
-				{ 
-					status: 429,
-					headers: {
-						'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-						'X-RateLimit-Reset': rateLimitResult.resetTime.toString()
-					}
-				}
-			);
-		}
 
-		// Server-side verification to prevent cheating
-		const verificationResult = await verifyGamePerformance(
-			gameStats,
-			timestamp,
-		);
 
-		if (!verificationResult.isValid) {
-			return NextResponse.json(
-				{ error: "Game performance verification failed" },
-				{ status: 400 },
-			);
-		}
+
 
 		// Calculate server-side reward amount based on game performance
 		const verifiedAmount = calculateServerSideReward(gameStats, amount);
@@ -144,47 +117,7 @@ export async function POST(request: NextRequest) {
 	}
 }
 
-async function verifyGamePerformance(
-	gameStats: any,
-	timestamp: number,
-): Promise<{ isValid: boolean; details: any }> {
-	try {
-		// Verify timestamp is recent (within last 5 minutes for active games)
-		const now = Date.now();
-		const timeDiff = now - timestamp;
-		const maxAllowedTime = 5 * 60 * 1000; // 5 minutes
 
-		if (timeDiff > maxAllowedTime) {
-			return { isValid: false, details: "Game session expired" };
-		}
-
-		// Verify game stats are reasonable and within expected ranges
-		if (gameStats.bestTime < 1000) { // Minimum 1 second
-			return { isValid: false, details: "Game time too short" };
-		}
-
-		if (gameStats.bestTime > 300000) { // Maximum 5 minutes
-			return { isValid: false, details: "Game time unreasonably long" };
-		}
-
-		if (gameStats.totalGames < 0) {
-			return { isValid: false, details: "Invalid total games count" };
-		}
-
-		if (gameStats.totalGames > 10000) { // Reasonable upper limit
-			return { isValid: false, details: "Total games count too high" };
-		}
-
-		// Additional verification logic:
-		// - Check for suspicious patterns (too many games in short time)
-		// - Verify game completion patterns
-		// - Rate limiting checks (implement rate limiting per user)
-
-		return { isValid: true, details: "Verification passed" };
-	} catch (error) {
-		return { isValid: false, details: "Verification failed" };
-	}
-}
 
 // Calculate server-side reward amount to prevent client manipulation
 function calculateServerSideReward(gameStats: any, clientAmount: number): number {

@@ -12,7 +12,7 @@ import { approve } from "thirdweb/extensions/erc20";
 import { claimTo } from "thirdweb/extensions/erc1155";
 import { getUserDetails } from "@/lib/thirdweb";
 import { validateTokenId, validateQuantity, validateRequestSize } from "@/lib/validation";
-import { rateLimitPurchases } from "@/lib/rateLimit";
+
 
 // Bird and Power-up prices in $ORBS tokens (tokenId -> price)
 const BIRD_PRICES = [30, 40, 50, 20, 10, 10]; // [neon-ronin, circuitwing, chainlord, orb-sentinel, slowmo, shield]
@@ -51,23 +51,7 @@ export async function POST(request: NextRequest) {
 		);
 	}
 
-	// Apply rate limiting for purchases
-	const rateLimitResult = rateLimitPurchases(userAddress);
-	if (!rateLimitResult.allowed) {
-		return NextResponse.json(
-			{ 
-				error: "Rate limit exceeded. Please wait before making another purchase.",
-				resetTime: rateLimitResult.resetTime
-			},
-			{ 
-				status: 429,
-				headers: {
-					'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-					'X-RateLimit-Reset': rateLimitResult.resetTime.toString()
-				}
-			}
-		);
-	}
+
 
 		// Parse request body
 		const { tokenId, quantity } = await request.json();

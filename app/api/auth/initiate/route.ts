@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateEmail, validateRequestSize } from "@/lib/validation";
-import { rateLimitAuth } from "@/lib/rateLimit";
+
 
 export async function POST(request: NextRequest) {
 	try {
@@ -24,23 +24,7 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		// Apply rate limiting for auth attempts
-		const rateLimitResult = rateLimitAuth(email);
-		if (!rateLimitResult.allowed) {
-			return NextResponse.json(
-				{ 
-					error: "Too many login attempts. Please wait before trying again.",
-					resetTime: rateLimitResult.resetTime
-				},
-				{ 
-					status: 429,
-					headers: {
-						'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-						'X-RateLimit-Reset': rateLimitResult.resetTime.toString()
-					}
-				}
-			);
-		}
+
 
 		// Validate required environment variable
 		if (!process.env.THIRDWEB_SECRET_KEY) {
