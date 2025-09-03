@@ -148,11 +148,4 @@ export const audioFunctions = {
 	},
 };
 
-// Extend Window interface for TypeScript
-declare global {
-	interface Window {
-		audioOnCoinCollect: () => void;
-		audioOnCrash: () => void;
-		audioOnJump: () => void;
-	}
-}
+
