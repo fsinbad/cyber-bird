@@ -156,11 +156,37 @@ export function FlappyBird({
 
 			// Burn the power-up on blockchain
 			try {
-				if (window.burnPowerUp) {
-					const tokenId = type === "slowmo" ? 4 : 5;
-					await window.burnPowerUp(tokenId, 1);
-					console.log("Power-up burned successfully:", type);
+				const tokenId = type === "slowmo" ? 4 : 5;
+				
+				// Get CSRF token from cookies
+				const getCsrfToken = () => {
+					const cookies = document.cookie.split(";");
+					const csrfCookie = cookies.find((cookie) =>
+						cookie.trim().startsWith("csrf-token="),
+					);
+					return csrfCookie ? csrfCookie.split("=")[1] : null;
+				};
+				
+				const csrfToken = getCsrfToken();
+				
+				const response = await fetch("/api/burn-powerup", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"x-csrf-token": csrfToken || "",
+					},
+					body: JSON.stringify({
+						tokenId,
+						quantity: 1,
+					}),
+				});
+
+				if (!response.ok) {
+					throw new Error(`Burn failed: ${response.status}`);
 				}
+
+				const result = await response.json();
+				console.log("Power-up burned successfully:", type, result);
 			} catch (error) {
 				console.error("Failed to burn power-up:", error);
 				// Revert local count if burn failed

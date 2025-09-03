@@ -146,13 +146,8 @@ export function CyberShop({
 			setLoadingStates((prev) => ({ ...prev, [tokenId]: false }));
 		}
 	};
-	// Expose burnPowerUp function globally for game to use
-	useEffect(() => {
-		(window as any).burnPowerUp = burnPowerUp;
-		return () => {
-			delete (window as any).burnPowerUp;
-		};
-	}, [burnPowerUp]);
+	// Note: burnPowerUp function is no longer exposed globally
+	// FlappyBird component now calls the API directly
 
 	return (
 		<div className="mt-12">
