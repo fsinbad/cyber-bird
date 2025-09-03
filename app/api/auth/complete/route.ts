@@ -1,67 +1,94 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { setSessionCookies, generateCsrfToken } from '@/lib/cookies'
+import { NextRequest, NextResponse } from "next/server";
+import { setSessionCookies, generateCsrfToken } from "@/lib/cookies";
+import { validateEmail, validateAuthCode, validateRequestSize } from "@/lib/validation";
 
 export async function POST(request: NextRequest) {
-  try {
-    const { email, code } = await request.json()
+	try {
+		// Validate request size
+		const sizeValidation = validateRequestSize(request);
+		if (!sizeValidation.isValid) {
+			return NextResponse.json(
+				{ error: sizeValidation.error },
+				{ status: 413 }
+			);
+		}
 
-    if (!email || !code) {
-      return NextResponse.json(
-        { error: 'Email and code are required' },
-        { status: 400 }
-      )
-    }
+		const { email, code } = await request.json();
 
-    // Verify login code using thirdweb API
-    const response = await fetch('https://api.thirdweb.com/v1/auth/complete', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-secret-key': process.env.THIRDWEB_SECRET_KEY || '',
-      },
-      body: JSON.stringify({
-        method: 'email',
-        email,
-        code,
-      }),
-    })
+		// Validate email
+		const emailValidation = validateEmail(email);
+		if (!emailValidation.isValid) {
+			return NextResponse.json(
+				{ error: emailValidation.error },
+				{ status: 400 }
+			);
+		}
 
-    if (!response.ok) {
-      const error = await response.text()
-      console.error('Thirdweb verify code error:', error)
-      return NextResponse.json(
-        { error: 'Invalid or expired code' },
-        { status: 400 }
-      )
-    }
+		// Validate auth code
+		const codeValidation = validateAuthCode(code);
+		if (!codeValidation.isValid) {
+			return NextResponse.json(
+				{ error: codeValidation.error },
+				{ status: 400 }
+			);
+		}
 
-    const data = await response.json()
+		// Validate required environment variable
+		if (!process.env.THIRDWEB_SECRET_KEY) {
+			return NextResponse.json(
+				{ error: "Server configuration error" },
+				{ status: 500 }
+			);
+		}
 
-    // Generate CSRF up front so we can include it in body
-    const csrfToken = generateCsrfToken()
+		// Verify login code using thirdweb API
+		const response = await fetch("https://api.thirdweb.com/v1/auth/complete", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"x-secret-key": process.env.THIRDWEB_SECRET_KEY,
+			},
+			body: JSON.stringify({
+				method: "email",
+				email,
+				code,
+			}),
+		});
 
-    const user = {
-      id: email,
-      email,
-      walletAddress: data.walletAddress || 'unknown',
-      createdAt: new Date().toISOString(),
-      csrfToken,
-    }
+		if (!response.ok) {
+			const error = await response.text();
+			return NextResponse.json(
+				{ error: "Invalid or expired code" },
+				{ status: 400 },
+			);
+		}
 
-    const res = NextResponse.json({ user })
-    setSessionCookies(res, {
-      authToken: data.token,
-      sessionMaxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
-      csrfMaxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
-      csrfToken,
-    })
+		const data = await response.json();
 
-    return res
-  } catch (error) {
-    console.error('Error verifying login code:', error)
-    return NextResponse.json(
-      { error: 'Failed to verify login code' },
-      { status: 500 }
-    )
-  }
+		// Generate CSRF up front so we can include it in body
+		const csrfToken = generateCsrfToken();
+
+		const user = {
+			id: email,
+			email,
+			walletAddress: data.walletAddress || "unknown",
+			createdAt: new Date().toISOString(),
+			csrfToken,
+		};
+
+		const res = NextResponse.json({ user });
+		setSessionCookies(res, {
+			authToken: data.token,
+			sessionMaxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+			csrfMaxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+			csrfToken,
+		});
+
+		return res;
+	} catch (error) {
+		return NextResponse.json(
+			{ error: "Failed to verify login code" },
+			{ status: 500 },
+		);
+	}
 }
