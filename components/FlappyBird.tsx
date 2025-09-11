@@ -74,6 +74,17 @@ export function FlappyBird({
 	const gameLoopRef = useRef<number>();
 	const lastTimeRef = useRef<number>(0);
 	const rewardsDistributedRef = useRef<boolean>(false);
+	const birdYRef = useRef<number>(300);
+	const birdVelocityRef = useRef<number>(0);
+	const pipesRef = useRef<Pipe[]>([]);
+	const coinsRef = useRef<Coin[]>([]);
+	const pipeSpeedRef = useRef<number>(2);
+	const scoreRef = useRef<number>(0);
+	const timeRef = useRef<number>(0);
+	const pipeIdRef = useRef<number>(0);
+	const coinIdRef = useRef<number>(0);
+	const coinsCollectedRef = useRef<number>(0);
+	const activePowerUpRef = useRef<"slowmo" | "shield" | null>(null);
 
 	const GAME_WIDTH = 800;
 	const GAME_HEIGHT = 600;
@@ -104,11 +115,25 @@ export function FlappyBird({
 		setRewardsDistributed(false);
 		rewardsDistributedRef.current = false;
 		lastTimeRef.current = Date.now();
+		
+		// Update refs
+		birdYRef.current = GAME_HEIGHT / 2;
+		birdVelocityRef.current = 0;
+		pipesRef.current = [];
+		coinsRef.current = [];
+		pipeSpeedRef.current = 2;
+		scoreRef.current = 0;
+		timeRef.current = 0;
+		pipeIdRef.current = 0;
+		coinIdRef.current = 0;
+		coinsCollectedRef.current = 0;
+		activePowerUpRef.current = null;
 	}, []);
 
 	const jump = useCallback(() => {
 		if (gameState !== "playing") return;
 		setBirdVelocity(JUMP_FORCE);
+		birdVelocityRef.current = JUMP_FORCE;
 
 		// Play jump sound
 		if (window.audioOnJump) {
@@ -146,6 +171,7 @@ export function FlappyBird({
 
 			// Activate power-up
 			setActivePowerUp(type);
+			activePowerUpRef.current = type;
 			setPowerUpDuration(type === "slowmo" ? 5000 : 5000); // 5s slowmo, 5s shield
 
 			// Update local count
@@ -353,43 +379,37 @@ export function FlappyBird({
 			lastTimeRef.current = currentTime;
 
 			// Apply slowmo effect
-			const slowmoMultiplier = activePowerUp === "slowmo" ? 0.1 : 1.0;
+			const slowmoMultiplier = activePowerUpRef.current === "slowmo" ? 0.1 : 1.0;
 			const clampedDeltaTime = Math.min(deltaTime * slowmoMultiplier, 100);
 
-			// Debug slowmo effect
-			if (activePowerUp === "slowmo" && Math.random() < 0.01) {
-				// Log 1% of the time to avoid spam
-				console.log("Slowmo active:", {
-					slowmoMultiplier,
-					deltaTime,
-					clampedDeltaTime,
-				});
-			}
-
 			// Update time and score
-			setTime((prev) => Math.max(0, prev + clampedDeltaTime));
-			setScore((prev) => Math.max(0, prev + Math.floor(clampedDeltaTime / 16)));
+			timeRef.current = Math.max(0, timeRef.current + clampedDeltaTime);
+			scoreRef.current = Math.max(0, scoreRef.current + Math.floor(clampedDeltaTime / 16));
+			setTime(timeRef.current);
+			setScore(scoreRef.current);
 
 			// Update bird physics
-			setBirdY((prev) => {
-				const newY = prev + birdVelocity;
-				const newVelocity = birdVelocity + GRAVITY;
-				setBirdVelocity(newVelocity);
+			const newVelocity = birdVelocityRef.current + (GRAVITY * clampedDeltaTime / 16);
+			birdVelocityRef.current = newVelocity;
+			setBirdVelocity(newVelocity);
+			
+			const newY = birdYRef.current + (newVelocity * clampedDeltaTime / 16);
+			birdYRef.current = newY;
+			setBirdY(newY);
 
-				// Check ground collision
-				if (newY + BIRD_SIZE > GROUND_Y) {
-					triggerCrashState();
-					return prev;
-				}
+			// Check ground collision
+			if (newY + BIRD_SIZE > GROUND_Y) {
+				triggerCrashState();
+				return;
+			}
 
-				// Check ceiling collision
-				if (newY < 0) {
-					setBirdVelocity(0);
-					return 0;
-				}
-
-				return newY;
-			});
+			// Check ceiling collision
+			if (newY < 0) {
+				birdVelocityRef.current = 0;
+				setBirdVelocity(0);
+				birdYRef.current = 0;
+				setBirdY(0);
+			}
 
 			// Update particles
 			setParticles((prev) => {
@@ -406,53 +426,44 @@ export function FlappyBird({
 			});
 
 			// Move pipes left
-			setPipes((prev) => {
-				const updated = prev
-					.map((pipe) => ({
-						...pipe,
-						x: pipe.x - pipeSpeed,
-					}))
-					.filter((pipe) => pipe.x + pipe.width > -50);
+			pipesRef.current = pipesRef.current
+				.map((pipe) => ({
+					...pipe,
+					x: pipe.x - (pipeSpeedRef.current * clampedDeltaTime / 16),
+				}))
+				.filter((pipe) => pipe.x + pipe.width > -50);
 
-				// Check if bird passed pipe for scoring
-				updated.forEach((pipe) => {
-					if (!pipe.passed && pipe.x + pipe.width < 100) {
-						pipe.passed = true;
-						setScore((prev) => prev + 10);
-					}
-				});
-
-				return updated.slice(0, 6); // Limit to 6 pipes max for wider screen
+			// Check if bird passed pipe for scoring
+			pipesRef.current.forEach((pipe) => {
+				if (!pipe.passed && pipe.x + pipe.width < 100) {
+					pipe.passed = true;
+					scoreRef.current += 10;
+					setScore(scoreRef.current);
+				}
 			});
+
+			pipesRef.current = pipesRef.current.slice(0, 6); // Limit to 6 pipes max
+			setPipes([...pipesRef.current]);
 
 			// Move coins left
-			setCoins((prev) => {
-				const updated = prev
-					.map((coin) => ({
-						...coin,
-						x: coin.x - pipeSpeed,
-					}))
-					.filter((coin) => coin.x + coin.width > -50);
-
-				return updated;
-			});
+			coinsRef.current = coinsRef.current
+				.map((coin) => ({
+					...coin,
+					x: coin.x - (pipeSpeedRef.current * clampedDeltaTime / 16),
+				}))
+				.filter((coin) => coin.x + coin.width > -50);
+			setCoins([...coinsRef.current]);
 
 			// Spawn new pipes with guaranteed safe spacing
-			if (Math.random() < 0.018 && pipes.length < 4) {
-				// Increased frequency from 0.012 to 0.018
+			if (Math.random() < 0.018 && pipesRef.current.length < 4) {
 				const pipeX = GAME_WIDTH + 50;
-
-				// Create more random and challenging pipe gaps
-				const minTopHeight = 80; // Reduced minimum for more variety
-				const maxTopHeight = GAME_HEIGHT - PIPE_GAP - 120; // Reduced maximum for more variety
-
-				// Generate a more random height that creates varied challenges
-				const topHeight =
-					Math.random() * (maxTopHeight - minTopHeight) + minTopHeight;
+				const minTopHeight = 80;
+				const maxTopHeight = GAME_HEIGHT - PIPE_GAP - 120;
+				const topHeight = Math.random() * (maxTopHeight - minTopHeight) + minTopHeight;
 				const bottomY = topHeight + PIPE_GAP;
 
 				const newPipe: Pipe = {
-					id: pipeId,
+					id: pipeIdRef.current,
 					x: pipeX,
 					topHeight,
 					bottomY,
@@ -461,42 +472,44 @@ export function FlappyBird({
 				};
 
 				// Check for overlap and safety before spawning
-				if (!checkPipeOverlap(newPipe, pipes) && isPipePositionSafe(newPipe)) {
-					setPipes((prev) => [...prev, newPipe]);
-					setPipeId((prev) => prev + 1);
+				if (!checkPipeOverlap(newPipe, pipesRef.current) && isPipePositionSafe(newPipe)) {
+					pipesRef.current.push(newPipe);
+					pipeIdRef.current += 1;
+					setPipes([...pipesRef.current]);
+					setPipeId(pipeIdRef.current);
 
-					// Spawn coin in pipe gap (always safe since gap is guaranteed)
+					// Spawn coin in pipe gap
 					if (Math.random() < 0.95) {
 						const coinY = topHeight + PIPE_GAP / 2 - COIN_SIZE / 2;
 						const newCoin: Coin = {
-							id: coinId,
+							id: coinIdRef.current,
 							x: pipeX + PIPE_WIDTH / 2 - COIN_SIZE / 2,
 							y: coinY,
 							width: COIN_SIZE,
 							height: COIN_SIZE,
 							collected: false,
 						};
-						setCoins((prev) => [...prev, newCoin]);
-						setCoinId((prev) => prev + 1);
+						coinsRef.current.push(newCoin);
+						coinIdRef.current += 1;
+						setCoins([...coinsRef.current]);
+						setCoinId(coinIdRef.current);
 					}
 				}
 			}
 
 			// Check collisions with pipes
 			const birdX = 150;
-			pipes.forEach((pipe) => {
-				if (checkCollision(birdX, birdY, BIRD_SIZE, pipe)) {
+			pipesRef.current.forEach((pipe) => {
+				if (checkCollision(birdX, birdYRef.current, BIRD_SIZE, pipe)) {
 					// Check if shield is active
-					if (activePowerUp === "shield") {
-						// Shield absorbs the hit - create shield particles instead of crash
+					if (activePowerUpRef.current === "shield") {
 						console.log("Shield blocked collision!");
 						createParticles(
 							birdX + BIRD_SIZE / 2,
-							birdY + BIRD_SIZE / 2,
+							birdYRef.current + BIRD_SIZE / 2,
 							15,
 							"sparkle",
 						);
-						// Shield continues to work for its full duration - don't deactivate
 						return;
 					}
 
@@ -504,7 +517,7 @@ export function FlappyBird({
 					console.log("Collision detected - game over!");
 					createParticles(
 						birdX + BIRD_SIZE / 2,
-						birdY + BIRD_SIZE / 2,
+						birdYRef.current + BIRD_SIZE / 2,
 						20,
 						"explosion",
 					);
@@ -519,66 +532,48 @@ export function FlappyBird({
 			});
 
 			// Check coin collection
-			setCoins((prev) => {
-				return prev.map((coin) => {
-					if (
-						!coin.collected &&
-						checkCoinCollision(150, birdY, BIRD_SIZE, coin)
-					) {
-						const newCoinCount = coinsCollected + 1;
-						setCoinsCollected(newCoinCount);
-						setScore((prevScore) => prevScore + 50);
-						createParticles(
-							coin.x + coin.width / 2,
-							coin.y + coin.height / 2,
-							8,
-							"sparkle",
-						);
+			coinsRef.current = coinsRef.current.map((coin) => {
+				if (
+					!coin.collected &&
+					checkCoinCollision(150, birdYRef.current, BIRD_SIZE, coin)
+				) {
+					coinsCollectedRef.current += 1;
+					scoreRef.current += 50;
+					setCoinsCollected(coinsCollectedRef.current);
+					setScore(scoreRef.current);
+					createParticles(
+						coin.x + coin.width / 2,
+						coin.y + coin.height / 2,
+						8,
+						"sparkle",
+					);
 
-						// Create celebration particles for each orb collected
-						createParticles(
-							birdX + BIRD_SIZE / 2,
-							birdY + BIRD_SIZE / 2,
-							10,
-							"explosion",
-						);
+					createParticles(
+						birdX + BIRD_SIZE / 2,
+						birdYRef.current + BIRD_SIZE / 2,
+						10,
+						"explosion",
+					);
 
-						if (window.audioOnCoinCollect) {
-							window.audioOnCoinCollect();
-						}
-
-						return { ...coin, collected: true };
+					if (window.audioOnCoinCollect) {
+						window.audioOnCoinCollect();
 					}
-					return coin;
-				});
+
+					return { ...coin, collected: true };
+				}
+				return coin;
 			});
+			setCoins([...coinsRef.current]);
 
 			// Increase difficulty
-			if (score > 0 && score % 100 === 0) {
-				setPipeSpeed((prev) => Math.min(prev + 0.3, 6));
+			if (scoreRef.current > 0 && scoreRef.current % 100 === 0) {
+				pipeSpeedRef.current = Math.min(pipeSpeedRef.current + 0.3, 6);
+				setPipeSpeed(pipeSpeedRef.current);
 			}
 
 			gameLoopRef.current = requestAnimationFrame(gameLoop);
 		},
-		[
-			gameState,
-			birdY,
-			birdVelocity,
-			pipes,
-			pipeSpeed,
-			score,
-			time,
-			pipeId,
-			coinId,
-			coinsCollected,
-			checkCollision,
-			calculateRewards,
-			createParticles,
-			triggerCrashState,
-			checkPipeOverlap,
-			isPipePositionSafe,
-			activePowerUp,
-		],
+		[gameState, checkCollision, createParticles, triggerCrashState, checkPipeOverlap, isPipePositionSafe],
 	);
 
 	useEffect(() => {
@@ -669,6 +664,7 @@ export function FlappyBird({
 				setPowerUpDuration((prev) => {
 					if (prev <= 100) {
 						setActivePowerUp(null);
+						activePowerUpRef.current = null;
 						return 0;
 					}
 					return prev - 100;
