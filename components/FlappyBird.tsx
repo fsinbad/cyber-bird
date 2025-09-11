@@ -264,15 +264,25 @@ export function FlappyBird({
 	);
 
 	const triggerCrashState = useCallback(() => {
+		console.log("💥 [FLAPPY-BIRD] Game crashed, triggering rewards...");
 		setGameState("crashed");
 
 		if (!rewardsDistributedRef.current) {
+			console.log("🎮 [FLAPPY-BIRD] Distributing rewards:", {
+				time,
+				coinsCollected,
+				gameState: "crashed"
+			});
+			
 			onGameComplete(time);
 			onCoinsCollected(coinsCollected);
 			const totalTokens = calculateRewards(time, coinsCollected);
+			console.log("💰 [FLAPPY-BIRD] Calculated total tokens:", totalTokens);
 			onTokensEarned(totalTokens);
 			setRewardsDistributed(true);
 			rewardsDistributedRef.current = true;
+		} else {
+			console.log("⚠️ [FLAPPY-BIRD] Rewards already distributed, skipping");
 		}
 	}, [time, coinsCollected, onGameComplete, onCoinsCollected, onTokensEarned]);
 
@@ -600,17 +610,27 @@ export function FlappyBird({
 				// If game is crashed/finished, space does nothing but still prevents scrolling
 			} else if (e.key === "e" || e.key === "E") {
 				if (gameState === "playing" && !rewardsDistributedRef.current) {
+					console.log("🏁 [FLAPPY-BIRD] Manual game end triggered");
 					setGameState("finished");
 					const finalTime = time;
 					const finalCoins = coinsCollected;
+
+					console.log("🎮 [FLAPPY-BIRD] Manual end rewards:", {
+						time: finalTime,
+						coinsCollected: finalCoins,
+						gameState: "finished"
+					});
 
 					onGameComplete(finalTime);
 					onCoinsCollected(finalCoins);
 
 					const totalTokens = calculateRewards(finalTime, finalCoins);
+					console.log("💰 [FLAPPY-BIRD] Manual end calculated tokens:", totalTokens);
 					onTokensEarned(totalTokens);
 					setRewardsDistributed(true);
 					rewardsDistributedRef.current = true;
+				} else {
+					console.log("⚠️ [FLAPPY-BIRD] Manual end blocked - game not playing or rewards already distributed");
 				}
 			} else if (e.key === "q" || e.key === "Q") {
 				e.preventDefault();
@@ -1205,21 +1225,32 @@ export function FlappyBird({
 				{gameState === "playing" && (
 					<div className="absolute top-4 right-4">
 						<button
-							onClick={() => {
-								if (rewardsDistributedRef.current) return;
+						onClick={() => {
+							if (rewardsDistributedRef.current) {
+								console.log("⚠️ [FLAPPY-BIRD] END MISSION blocked - rewards already distributed");
+								return;
+							}
 
-								setGameState("finished");
-								const finalTime = time;
-								const finalCoins = coinsCollected;
+							console.log("🏁 [FLAPPY-BIRD] END MISSION button clicked");
+							setGameState("finished");
+							const finalTime = time;
+							const finalCoins = coinsCollected;
 
-								onGameComplete(finalTime);
-								onCoinsCollected(finalCoins);
+							console.log("🎮 [FLAPPY-BIRD] END MISSION rewards:", {
+								time: finalTime,
+								coinsCollected: finalCoins,
+								gameState: "finished"
+							});
 
-								const totalTokens = calculateRewards(finalTime, finalCoins);
-								onTokensEarned(totalTokens);
-								setRewardsDistributed(true);
-								rewardsDistributedRef.current = true;
-							}}
+							onGameComplete(finalTime);
+							onCoinsCollected(finalCoins);
+
+							const totalTokens = calculateRewards(finalTime, finalCoins);
+							console.log("💰 [FLAPPY-BIRD] END MISSION calculated tokens:", totalTokens);
+							onTokensEarned(totalTokens);
+							setRewardsDistributed(true);
+							rewardsDistributedRef.current = true;
+						}}
 							className="bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700 text-white font-bold py-2 px-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-cyan-500/25 hover:scale-105 text-sm border border-cyan-400/30 font-mono"
 						>
 							⚡ END MISSION

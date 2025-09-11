@@ -277,15 +277,22 @@ export default function Home() {
 	};
 
 	const handleTokensEarned = async (tokens: number) => {
+		console.log("🎮 handleTokensEarned called with tokens:", tokens);
+		
 		if (tokens === 0) {
+			console.log("⚠️ No tokens to distribute, skipping reward claim");
 			return; // Skip if no tokens to distribute
 		}
 
 		// Automatically send rewards to user wallet
 		try {
 			if (!userAddress) {
+				console.log("❌ No user address available, cannot claim rewards");
 				return;
 			}
+
+			console.log("👤 User address:", userAddress);
+			console.log("📊 Game stats:", gameStats);
 
 			const rewardData = {
 				amount: tokens,
@@ -295,6 +302,8 @@ export default function Home() {
 				},
 				timestamp: Date.now(),
 			};
+
+			console.log("💰 Reward data prepared:", rewardData);
 
 			// Get CSRF token from cookie
 			const getCsrfToken = () => {
@@ -306,7 +315,9 @@ export default function Home() {
 			};
 
 			const csrfToken = getCsrfToken();
+			console.log("🔐 CSRF token:", csrfToken ? "Present" : "Missing");
 
+			console.log("🚀 Sending reward claim request to /api/claim-rewards");
 			const response = await fetch("/api/claim-rewards", {
 				method: "POST",
 				headers: {
@@ -316,8 +327,12 @@ export default function Home() {
 				body: JSON.stringify(rewardData),
 			});
 
+			console.log("📡 Response status:", response.status);
+			console.log("📡 Response ok:", response.ok);
+
 			if (response.ok) {
 				const result = await response.json();
+				console.log("✅ Reward claim successful:", result);
 
 				// Show success message
 				setToastMessage({
@@ -328,6 +343,10 @@ export default function Home() {
 				setShowToast(true);
 				setTimeout(() => setShowToast(false), 4000);
 			} else {
+				console.log("❌ Reward claim failed with status:", response.status);
+				const errorText = await response.text();
+				console.log("❌ Error response body:", errorText);
+				
 				// Show error message
 				setToastMessage({
 					title: "Reward Error",
@@ -338,6 +357,15 @@ export default function Home() {
 				setTimeout(() => setShowToast(false), 4000);
 			}
 		} catch (error) {
+			console.error("💥 Error claiming rewards:", error);
+			console.error("💥 Error details:", {
+				message: error instanceof Error ? error.message : "Unknown error",
+				stack: error instanceof Error ? error.stack : undefined,
+				tokens,
+				userAddress,
+				gameStats
+			});
+			
 			// Show error message
 			setToastMessage({
 				title: "Reward Error",
